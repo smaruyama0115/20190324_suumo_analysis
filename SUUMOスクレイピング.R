@@ -483,7 +483,7 @@ df_lnglat <-
   filter(!is.na(lng),!is.na(lat)) %>% 
   #条件をフィルタに入れる
   filter(
-    rent_total <= 100000,
+    rent_total <= 130000,
     rent_total >= 70000,
     dist_nakanosakaue <= 1000,
     flag_not_unitbath == 1,
