@@ -1,0 +1,122 @@
+---
+title: "suumo_analysis"
+author: "shohei_maruyama"
+date: "2019/3/24"
+output:
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+    md_extensions: -ascii_identifiers
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  comment="#",
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+# 地図の表示
+
+```{r}
+# パッケージの読み込み
+library(tidyverse)
+library(magrittr)
+library(leaflet)
+library(mlr)
+
+# 前処理済みのデータを読み込み
+input_data <- read_csv("output.csv", locale = locale(encoding = "cp932"))
+
+# 地図上に賃貸をプロット
+
+#中野坂上の経度・緯度情報を変数に格納
+lnglat_nakanosakaue = c(139.682223,35.697064)
+
+#家賃を絞る
+plot_data <-
+  input_data %>% 
+  filter(!is.na(lng),!is.na(lat)) %>% 
+  #条件をフィルタに入れる
+  filter(
+    rent_total <= 100000,
+    rent_total >= 70000,
+    dist_nakanosakaue <= 1000,
+    flag_not_unitbath == 1,
+    kouzou != "木造"
+    ) %>% 
+  mutate(
+    label = name,
+    popup = str_c(
+      "<table>",
+      "<tr><td>家賃</td><td>",rent_total,"</td></tr>",
+      "<tr><td>間取り</td><td>",floor_plan,"</td></tr>",
+      "<tr><td>間取り詳細</td><td>",floor_plan_detail,"</td></tr>",
+      "<tr><td>階</td><td>",floor,"階</td></tr>",
+      "<tr><td>向き</td><td>",muki,"</td></tr>",
+      "<tr><td>築年数</td><td>",age,"</td></tr>",
+      "<tr><td>構造</td><td>",kouzou,"</td></tr>",
+      "<tr><td>直線距離</td><td>",round(dist_nakanosakaue),"m</td></tr>",
+      "</table><br>",
+      "詳細 : <br>",details,"<br>",
+      "<a href=",url," target=”_blank”>",url,"</a>"
+    )
+  )
+
+#家賃別カラー用のパレットの作成
+pal <- colorNumeric(palette="RdYlBu", domain=plot_data$rent_total, reverse=TRUE)
+
+# 地図の作成
+leaflet(plot_data) %>% 
+  addTiles() %>% 
+  setView(lng=lnglat_nakanosakaue[1],lat=lnglat_nakanosakaue[2],zoom=16) %>% 
+  addCircleMarkers(lng=~lng,lat=~lat,color=~pal(rent_total),label=~label,popup=~popup) %>% 
+  addLegend(position='topright', pal=pal, values=~rent_total) %>% 
+  addScaleBar(position="bottomleft",options = scaleBarOptions(imperial=FALSE))
+```
+
+## 地図(拡大版)
+
+拡大版は[こちら](./map.html)
+
+# 重回帰分析
+
+```{r}
+#機械学習用の前処理----
+input_data_ml <-
+  input_data %>% 
+  select(
+      -X1
+    , -name
+    , -url
+    , -rent
+    , -admin
+    , -deposit
+    , -key_money
+    , -shozaichi
+    , -ekitoho_1
+    , -ekitoho_2
+    , -ekitoho_3
+    , -floor_plan
+    , -floor_plan_detail
+    , -lat
+    , -lng
+    , -details
+  ) %>% 
+  mutate_if(
+    .predicate = is.character,
+    .funs = ~ ifelse(.=="-",NA,.) %>% factor
+  ) %>% 
+  createDummyFeatures(target="rent_total")
+
+# 回帰分析の実施
+kaiki <- lm(rent_total ~., data=input_data_ml)
+summary(kaiki)
+```
+
+
+
+
+
