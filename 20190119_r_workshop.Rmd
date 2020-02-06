@@ -1,0 +1,398 @@
+---
+title: "R勉強会"
+author: "Maruyama Shohei"
+output:
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+    md_extensions: -ascii_identifiers
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  comment="#
+  ",
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+# プロジェクト・ファイルの作成
+- 左上の「Create a project」でプロジェクトを作成できる。
+- プロジェクトを作成しておくと、以下のようなメリットがある。
+    - Gitでの管理がかんたんになる。
+    - デフォルトフォルダがプロジェクトのフォルダになる
+    - 他のプロジェクトと環境を独立させることができる
+- 左上のボタンからRスクリプトのファイルを作成する。
+    - 後々のレポート作成のことを考えると「R markdown」でファイルを作成するのがおすすめ。
+
+# コードの作成・実行
+- `Alt + Control + I`でチャンクを作成する。
+    - Rのコードはこのチャンクの中に書いていく
+- `Control + Enter`でカーソル行のコードを実行
+- `Control + Shift + Enter`でチャンク内のコードをすべて実行する。
+
+# ライブラリの読み込み
+
+- ライブラリのインストールは`install.packages("[ライブラリ名]")`で行う。
+- インストールしたライブラリはコード内で読み込む必要がある。
+    - ライブラリの読み込みは`library`で行う。
+
+```{r}
+#ライブラリの読み込み----
+library(tidyverse)
+library(magrittr)
+library(corrr)
+library(GGally)
+library(esquisse)
+library(mlr)
+library(MuMIn)
+```
+
+# データの読み込み
+
+- データの読み込みは`read_csv()`で行う
+- `Shift-JIS`のファイルを読み込む際は、オプションで`locale=locale(encoding="CP932")`を指定
+
+```{r}
+#データの読み込み
+data <-
+  "output.csv" %>%
+  read_csv(locale=locale(encoding="CP932"))
+
+data %>% View
+
+# フラグの追加
+data2 <-
+  data %>%
+    filter(
+    floor_plan %in% c('1DK','1K','ワンルーム')
+  ) %>% 
+  mutate(
+    flag_dokuritsu_senmendai = if_else(details %>% str_detect("洗面化粧台"),1,0),
+    flag_oidaki              = if_else(details %>% str_detect("追焚"),1,0),
+    flag_balcony              = if_else(details %>% str_detect("バルコニー"),1,0),
+    time_nakanosakaue_minutes = dist_nakanosakaue / 80
+  ) 
+```
+
+# データのサマリを確認
+
+```{r}
+data2 %>% summary
+```
+    
+## 各列の意味について
+
+列名              | 意味
+----------------- | -------------
+id                | id
+name              | 賃貸名
+url               | 賃貸情報のURL
+rent              | 賃料
+admin             | 管理費/共益費
+rent_total        | 賃料+管理費+共益費
+deposit           | 敷金
+key_money         | 礼金
+shozaichi         | 住所
+ekitoho_1~3       | 駅から徒歩何分か
+floor_plan        | 間取り
+floor_plan_detail | 間取り詳細
+area              | 床面積
+age               | 築年数
+floor             | 階数
+muki              | 向き
+kouzou            | 構造
+lat,lon           | 経度・緯度
+dist_nakanosakaue | 中野坂上までの距離
+details           | 物件詳細
+flag_teikishakuya | 定期借家なら1
+flag_not_unitbath | ユニットバスでないなら1
+flag_kado         | 角部屋なら1
+flag_yokushitsu_kanso | 浴室乾燥付きなら1
+flag_autolock     | オートロックなら1
+flag_takuhai      | 宅配ボックス付きなら1
+flag_3_konro      | 3口コンロ付きなら1
+flag_2_konro      | 2口コンロ付きなら1
+flag_onsui        | ウォッシュレット付きなら1
+flag_dokuritsu_senmendai | 独立洗面台付きなら1
+flag_oidaki       | 追焚機能付きなら1
+
+
+```{r}
+data2 %>% head
+```
+
+# 家賃のヒストグラムを書いてみる
+
+```{r}
+data2 %>% 
+  ggplot(
+    aes(
+      x = rent_total
+    )
+  ) +
+  geom_histogram()
+```
+
+# 部屋の向き別の家賃
+
+```{r}
+data2 %>% 
+  ggplot(
+    aes(
+      x = muki,
+      y = rent_total
+    )
+  ) +
+  geom_boxplot() +
+  theme_gray(base_family = "HiraKakuPro-W3")
+```
+
+# 宅配ボックスの有無と家賃
+```{r}
+data2 %>% 
+  ggplot(
+    aes(
+      x = flag_takuhai %>% as.factor(),
+      y = rent_total
+    )
+  ) +
+  geom_boxplot()
+```
+
+# floor_plan別に家賃を確認
+
+```{r}
+data2 %>% 
+  ggplot(
+    aes(
+      x      = rent_total,
+      colour = floor_plan,
+      fill   = floor_plan
+    )
+  ) +
+  geom_density(alpha = 0.3) +
+  theme_gray(base_family = "HiraKakuPro-W3")
+
+```
+
+# floor_plan別に部屋面積を確認
+
+```{r}
+data2 %>% 
+  ggplot(
+    aes(
+      x      = area,
+      colour = floor_plan,
+      fill   = floor_plan
+    )
+  ) +
+  geom_density(alpha = 0.3) +
+  theme_gray(base_family = "HiraKakuPro-W3")
+
+```
+
+# floor_plan別に部屋面積あたりの家賃を確認
+
+```{r}
+data2 %>% 
+  ggplot(
+    aes(
+      x      = rent_total/area,
+      colour = floor_plan,
+      fill   = floor_plan
+    )
+  ) +
+  geom_density(alpha = 0.3) +
+  theme_gray(base_family = "HiraKakuPro-W3")
+
+```
+
+# floor_plan別に築年数を確認
+
+```{r}
+data2 %>% 
+  ggplot(
+    aes(
+      x      = age,
+      colour = floor_plan,
+      fill   = floor_plan
+    )
+  ) +
+  geom_density(alpha = 0.3) +
+  theme_gray(base_family = "HiraKakuPro-W3")
+```
+
+# 線形回帰
+
+```{r}
+data2 %>% colnames
+
+data2 %>%
+  # mutate(
+  #   flag_age_under_20 = if_else(age<=10,1,0)
+  # ) %>% 
+  select(
+      rent_total
+    , floor_plan
+    # , area
+    # , age
+    , floor
+    , time_nakanosakaue_minutes
+    , matches("flag")
+    , -flag_teikishakuya
+    # , -flag_dokuritsu_senmendai
+  ) %$% 
+  # mutate(
+  #   floor_plan = floor_plan %>% as.factor
+  # ) %>% 
+  # createDummyFeatures(target="rent_total") %$% 
+  lm(rent_total ~ .,data=.) %>% 
+  summary
+
+```
+
+# 相関関係の確認
+
+```{r}
+data2 %>% colnames
+
+data2 %>%
+  select(
+      rent_total
+    , floor_plan
+    , area
+    , age
+    , floor
+    , time_nakanosakaue_minutes
+    , matches("flag")
+    , -flag_teikishakuya
+  ) %>% 
+  mutate(
+    floor_plan = floor_plan %>% as.factor
+  ) %>%
+  createDummyFeatures(target="rent_total")  %>% 
+  correlate %>% 
+  rplot(print_cor = TRUE) +
+  theme(axis.text.x = element_text(angle = 90))
+
+```
+
+# 良さそうな物件を見てみる
+
+```{r}
+data2 %>% 
+  filter(
+    floor_plan %in% c("ワンルーム"),
+    flag_balcony == 0,
+    floor >= 2,
+    time_nakanosakaue_minutes <= 10,
+    flag_not_unitbath == 1
+  ) %>% View
+```
+
+
+```{r}
+# ユニットバス別の家賃
+
+data2 %>% 
+  filter(
+    floor_plan %in% c('1DK','1K','1LDK')
+  ) %>% 
+  ggplot(
+    aes(
+      x      = rent_total,
+      colour = floor_plan,
+      fill   = floor_plan
+    )
+  ) +
+  geom_density(alpha = 0.3) +
+  facet_grid(flag_yokushitsu_kansou ~ .)
+```
+
+# 家賃と床面積の相関を確認
+
+```{r}
+data2 %>% 
+  ggplot(
+    aes(
+      x = area,
+      y = rent_total
+    )
+  ) +
+  geom_point()
+```
+
+# 家賃と築年数の相関を確認
+
+```{r}
+data2 %>% 
+  ggplot(
+    aes(
+      x = age,
+      y = rent_total
+    )
+  ) +
+  geom_point()
+```
+
+# 相関を一斉に確認する
+
+```{r}
+data2 %>% 
+  select(
+    area,
+    age,
+    floor,
+    rent_total,
+    flag_not_unitbath
+  ) %>% 
+  mutate(
+    flag_not_unitbath = flag_not_unitbath %>% as.factor
+  ) %>% 
+  ggpairs(
+    mapping = aes(color = flag_not_unitbath, alpha = 0.3)
+  )
+
+?ggpairs
+```
+
+# 家賃の相関を確認
+
+```{r}
+data2 %>% colnames
+
+data2 %>% 
+  filter(
+    floor_plan %in% c('1DK','1K','1LDK')
+  ) %>% 
+  filter(
+    area %>% between(25,35)
+  ) %>% 
+  select(
+      "rent_total"
+    , "area"
+    , "age"
+    , "floor"
+    , matches("flag_")
+  ) %>% 
+  correlate %>% 
+  rplot(print_cor = TRUE) +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r}
+
+data <- matrix(c(500*0.444, 500*0.556, 500*0.586, 500*0.414), ncol=2, byrow=T) 
+
+chisq.test(data)
+```
+
+
+
+
+
+
+
